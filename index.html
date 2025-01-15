@@ -282,7 +282,7 @@ function draw(data) {
       path = '/' + d.data.name + path;
       d = d.parent;
     }
-    return url + path;
+    return encodeURI(url + path);
   }
 
   const ng = svg.append("g");
