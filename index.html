@@ -114,45 +114,35 @@
 </head>
 
 <body>
-
-<div id="menu">
-  <h1>repofiles</h1>
-  <div id=inputs>
-    <input id="repoInput" type="text" placeholder="enter a github repo url"></input>
-    <button id="repoButton">go</button>
+  <div id="menu">
+    <h1>repofiles</h1>
+    <div id=inputs>
+      <input id="repoInput" type="text" placeholder="enter a github repo url"></input>
+      <button id="repoButton">go</button>
+    </div>
+      <div id="status"></div>
   </div>
-    <div id="status"></div>
-</div>
-<div id="repo"></div>
-  
-<div id="made">
-  Made by <a href="https://benjdd.com">Ben</a><br/>
-  Powered by <a href="https://d3js.org/">D3</a> <br/>
-  and <a href="https://docs.github.com/en/rest">GitHub</a><br/>
-</div>
-
-<div id="help">
-  Click to zoom<br/>
-  SHIFT-click to slow zoom<br/>
-  ALT-click to view file
-</div>
-
+  <div id="repo"></div>
+  <div id="made">
+    Made by <a href="https://benjdd.com">Ben</a><br/>
+    Powered by <a href="https://d3js.org/">D3</a> <br/>
+    and <a href="https://docs.github.com/en/rest">GitHub</a><br/>
+  </div>
+  <div id="help">
+    Click to zoom<br/>
+    SHIFT-click to slow zoom<br/>
+    ALT-click to view file
+  </div>
 </body>
 
 <script>
-
-let tree = undefined;
-let currentOwner = undefined;
-let currentRepo = undefined;
-let currentBranch = undefined;
-
+let currentRepo = {};
 
 function setStatus(text) {
   document.getElementById('status').textContent = text;
 }
 
-async function fetchDefaultBranch(owner, repo) {
-  const url = `https://api.github.com/repos/${owner}/${repo}`;
+async function fetchGitHub(url, after) {
   const options = {
     method: "GET",
     headers: {
@@ -160,7 +150,6 @@ async function fetchDefaultBranch(owner, repo) {
       "X-GitHub-Api-Version": "2022-11-28"
     }
   };
-
   try {
     const response = await fetch(url, options);
     if (!response.ok) {
@@ -174,7 +163,7 @@ async function fetchDefaultBranch(owner, repo) {
         setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
       }
     } else {
-      currentDefaultBranch = data['default_branch'];
+      after(data);
     }
   } catch (error) {
     console.error("Error fetching the latest commit:", error);
@@ -182,65 +171,29 @@ async function fetchDefaultBranch(owner, repo) {
   }
 }
 
-async function fetchLatestCommit(owner, repo) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/commits`;
-  const options = {
-    method: "GET",
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28"
-    }
-  };
-
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    const data = await response.json();
-    if ('message' in data) {
-      if (data.message && data.message.startsWith('API rate limit exceeded')) {
-        setStatus('GitHub API rate limit exceeded. Wait, or try from another device.', );
-      } else {
-        setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
-      }
-    } else {
-
-      console.log(data);
-      const latestCommit = data[0];
-      fetchGitHubTree(owner, repo, latestCommit.sha);
-      fetchDefaultBranch(owner, repo); // TODO: This is done async!
-    }
-  } catch (error) {
-    console.error("Error fetching the latest commit:", error);
-    setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
-  }
-}
-
-async function fetchGitHubTree(owner, repo, sha) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`;
-  const options = {
-    method: "GET",
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28"
-    }
-  };
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    const data = await response.json();
-    const tree = postProcessData(data.tree);
-    currentOwner = owner;
-    currentRepo = repo;
-    draw(tree);
+async function loadRepoTree(owner, repo, sha, defaultBranch) {
+  fetchGitHub(`https://api.github.com/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`, (data) => { 
+    currentRepo.tree = postProcessData(data.tree);
+    currentRepo.owner = owner;
+    currentRepo.repo = repo;
+    currentRepo.defaultBranch = repo;
+    draw(currentRepo.tree);
     setStatus(`loaded file visualization for ${owner}/${repo}`);
-  } catch (error) {
-    console.error("Error fetching the GitHub tree:", error);
-    setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
-  }
+  });
+}
+
+async function loadRepoDefaultBranchAndTree(owner, repo, sha) {
+  fetchGitHub(`https://api.github.com/repos/${owner}/${repo}`, (data) => { 
+    const defaultBranch = data['default_branch'];
+    loadRepoTree(owner, repo, sha, defaultBranch);
+  });
+}
+
+async function loadRepo(owner, repo) {
+  fetchGitHub(`https://api.github.com/repos/${owner}/${repo}/commits`, (data) => { 
+    const latestCommit = data[0];
+    loadRepoDefaultBranchAndTree(owner, repo, latestCommit.sha);
+  });
 }
 
 function getElementWithName(climb, name) {
@@ -315,8 +268,8 @@ function draw(data) {
   const root = pack(data);
 
   function getGitHubFileURL(d) {
-    // https://github.com/bddicken/languages/blob/main/fibonacci/c/code.citer    let url = `https://github.com/${currentOwner}/${currentRepo}/tree/${currentDefaultBranch}`;
-    let url = `https://github.com/${currentOwner}/${currentRepo}/tree/${currentDefaultBranch}`;
+    // https://github.com/bddicken/languages/blob/main/fibonacci/c/code.citer    let url = `https://github.com/${currentRepo.owner}/${currentRepo.repo}/tree/${currentRepo.defaultBranch}`;
+    let url = `https://github.com/${currentRepo.owner}/${currentRepo.repo}/tree/${currentRepo.defaultBranch}`;
     let path = '';
     while (d.parent != null) {
       path = '/' + d.data.name + path;
@@ -396,7 +349,6 @@ function draw(data) {
     label
       .filter(function(d) { return d.parent === focus || d === focus || this.style.display === "inline"; })
       .transition(transition)
-      //.transition().duration(2000)
         .style('font-size', d => getFontSize(d, focus))
         .style("opacity", function(d) { if (d.parent === focus || (d === focus && !d.children)) return 0.75; return 0; })
         .on("start",      function(d) { if (d.parent === focus || (d === focus && !d.children)) this.style.display = "inline"; })
@@ -415,21 +367,26 @@ function getRepoInfoFromURL() {
       return true;
     }
   } catch (_) {
+    // do nothing on purpose here, just return false
   }
   return false;
 }
-  
-function fetchAndDisplay(owner, repo) {
+
+function setURLParams(owner, repo) {
   const toEditURL = new URL(window.location);
   toEditURL.searchParams.set('owner', owner);
   toEditURL.searchParams.set('repo', repo);
   window.history.replaceState(null, null, toEditURL);
-  document.getElementById('repo').innerHTML = '';
-  setStatus(`loading ${owner}/${repo}...`);
-  fetchLatestCommit(owner, repo);
 }
 
-document.getElementById('repoButton').addEventListener('click', () => { 
+function fetchAndDisplay(owner, repo) {
+  setURLParams(owner, repo);  
+  document.getElementById('repo').innerHTML = '';
+  setStatus(`loading ${owner}/${repo}...`);
+  loadRepo(owner, repo);
+}
+
+function go() {
   const url = document.getElementById('repoInput').value;
   const trimmedUrl = url.replace(/\/+$/, "");
   const split = trimmedUrl.split('/')
@@ -437,6 +394,13 @@ document.getElementById('repoButton').addEventListener('click', () => {
   repo = split[l-1];
   owner = split[l-2];
   fetchAndDisplay(owner, repo);
+}
+
+document.getElementById('repoButton').addEventListener('click', () => go());
+document.getElementById("repoInput").addEventListener("keydown", function(event) {
+  if (event.key === "Enter") {
+    go();
+  }
 });
 
 if (!getRepoInfoFromURL()) {
@@ -444,15 +408,11 @@ if (!getRepoInfoFromURL()) {
   // Initially just load the json file from the server for neovim
   d3.json("/cache/neovim_neovim.json")
     .then(function(data){
-      currentOwner = 'neovim';
-      currentRepo = 'neovim';
-      currentDefaultBranch = 'master';
-      tree = postProcessData(data.tree);
-      draw(tree);
+      currentRepo = data;
+      draw(currentRepo.tree);
       setStatus(`loaded file visualization for neovim/neovim`);
     });
 }
-
 </script>
 
 </html>
