@@ -332,7 +332,7 @@ function draw(data) {
     .join("text")
       .style('font-size', d => getFontSize(d, root))
       .style("display", d => d.parent === root ? "inline" : "none")
-      .style("opacity", d => d.parent === root ? 0.0 : 0)
+      .style("opacity", d => d.parent === root ? 0.75 : 0)
       .style('font-weight', 'bold')
       .style('dominant-baseline', 'middle')
       .text(d => d.data.name);
@@ -371,7 +371,7 @@ function draw(data) {
       .filter(function(d) { return d.parent === focus || d === focus || this.style.display === "inline"; })
       .transition(transition)
         .style('font-size', d => getFontSize(d, focus))
-        //.style("opacity", function(d) { if (d.parent === focus || (d === focus && !d.children)) return 0.75; return 0; })
+        .style("opacity", function(d) { if (d.parent === focus || (d === focus && !d.children)) return 0.75; return 0; })
         .on("start",      function(d) { if (d.parent === focus || (d === focus && !d.children)) this.style.display = "inline"; })
         .on("end",        function(d) { if (!(d.parent === focus || (d === focus && !d.children))) this.style.display = "none"; })
   }
