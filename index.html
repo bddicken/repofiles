@@ -1,0 +1,456 @@
+<html>
+
+<head>
+  <script src="./d3.v7.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+  body {
+    font-family: SFMono-Regular, monospace;
+    padding: 0px;
+    margin: 0px;
+    background-color: white;
+  }
+  #repo {
+    position: fixed;
+    top: 170px;
+  }
+  #menu {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    right: 0px;
+    height: 170px;
+    margin-bottom: 20px;
+    margin-left: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    width: 100%;
+    max-width: 700px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.75em;
+    color: #47b7f8;
+ }
+ #status {
+   margin-top: 8px;
+   color: #444;
+ }
+  #repoInput {
+    text-align: left;
+    font-size: 1em;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    padding: 9px 7px;
+    margin: 0px 0;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-right: 4em;
+    box-sizing: border-box;
+    border: 1px solid #bbb;
+    outline: none;
+    text-align: center;
+    background-color: #fff;
+    filter: drop-shadow( 0px 2px 2px rgba(150, 150, 150, 0.2));
+  }
+  #repoButton {
+    display: inline-block;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    padding: 9.5px 14px 9.5px;
+    font-size: 1em;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    outline: none;
+    background-color: #bbb;
+    border: 0px solid #444;
+    font-weight:600;
+    filter: drop-shadow( 0px 2px 2px rgba(150, 150, 150, 0.2));
+    margin-top: 0px !important;
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    width: 4em;
+  }
+  svg, div {
+    text-align: center;
+    color: #ddd;
+  }
+  text {
+    font-family: SFMono-Regular,monospace;
+    font-size: 12px;
+  }
+  #inputs {
+    position: relative;
+    width: 90%;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #made {
+    position: fixed;
+    bottom: 20px;
+    width: 500px;
+    left: 20px;
+    text-align: left;
+    color: black;
+    font-size: 0.8em;
+  }
+  #help {
+    position: fixed;
+    bottom: 20px;
+    width: 500px;
+    right: 20px;
+    text-align: right;
+    color: black;
+    font-size: 0.8em;
+  }
+  a {
+    color: #444;
+  }
+  </style>
+</head>
+
+<body>
+
+<div id="menu">
+  <h1>repofiles</h1>
+  <div id=inputs>
+    <input id="repoInput" type="text" placeholder="enter a github repo url"></input>
+    <button id="repoButton">go</button>
+  </div>
+    <div id="status"></div>
+</div>
+<div id="repo"></div>
+  
+<div id="made">
+  Made by <a href="https://benjdd.com">Ben</a>.<br/>
+  Powered by <a href="https://docs.github.com/en/rest">GitHub</a> and <a href="https://d3js.org/">D3</a>.
+</div>
+
+<div id="help">
+  Click to zoom. <br/>
+  SHIFT-click to slow zoom. <br/>
+  ALT-click to view file.
+</div>
+
+</body>
+
+<script>
+
+let tree = undefined;
+let currentOwner = undefined;
+let currentRepo = undefined;
+let currentBranch = undefined;
+
+
+function setStatus(text) {
+  document.getElementById('status').textContent = text;
+}
+
+async function fetchDefaultBranch(owner, repo) {
+  const url = `https://api.github.com/repos/${owner}/${repo}`;
+  const options = {
+    method: "GET",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  };
+
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    const data = await response.json();
+    if ('message' in data) {
+      if (data.message && data.message.startsWith('API rate limit exceeded')) {
+        setStatus('GitHub API rate limit exceeded. Wait, or try from another device.', );
+      } else {
+        setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
+      }
+    } else {
+      currentDefaultBranch = data['default_branch'];
+    }
+  } catch (error) {
+    console.error("Error fetching the latest commit:", error);
+    setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
+  }
+}
+
+async function fetchLatestCommit(owner, repo) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits`;
+  const options = {
+    method: "GET",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  };
+
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    const data = await response.json();
+    if ('message' in data) {
+      if (data.message && data.message.startsWith('API rate limit exceeded')) {
+        setStatus('GitHub API rate limit exceeded. Wait, or try from another device.', );
+      } else {
+        setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
+      }
+    } else {
+
+      console.log(data);
+      const latestCommit = data[0];
+      fetchGitHubTree(owner, repo, latestCommit.sha);
+      fetchDefaultBranch(owner, repo); // TODO: This is done async!
+    }
+  } catch (error) {
+    console.error("Error fetching the latest commit:", error);
+    setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
+  }
+}
+
+async function fetchGitHubTree(owner, repo, sha) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`;
+  const options = {
+    method: "GET",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  };
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    const data = await response.json();
+    const tree = postProcessData(data.tree);
+    currentOwner = owner;
+    currentRepo = repo;
+    draw(tree);
+    setStatus(`loaded file visualization for ${owner}/${repo}`);
+  } catch (error) {
+    console.error("Error fetching the GitHub tree:", error);
+    setStatus('An unknown error occurred. You can @BenjDicken on twitter.');
+  }
+}
+
+function getElementWithName(climb, name) {
+  for (const e of climb.children) {
+    if (e.name == name) return e;
+  }
+  return undefined;
+}
+function postProcessData(data) {
+  const tree = {name: 'flare', children: []};
+  for (const row of data) {
+    const split = row.path.split('/');
+    let climb = tree;
+    for (let i = 0; i < split.length; i++) {
+      const component = split[i];
+      const element = getElementWithName(climb, component);
+      if (element == undefined) {
+        if (i == split.length - 1) {
+          const branch = {name: component, value: row.size, children: []};
+          climb.children.push(branch);
+        } else {
+          const branch = {name: component, children: []};
+          climb.children.push(branch);
+          climb = branch;
+        }
+      } else {
+        climb = element;
+      }
+    }
+  }
+  return tree;
+}
+  
+function draw(data) {
+
+  // TODO: change this so that it can be dynamically resized when window resizes
+
+  let width = window.innerWidth;
+  let height = window.innerHeight - 170;
+  let wh = Math.min(width, height);
+  const svg = d3.select("#repo")
+    .append("svg")
+      .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("style", `max-width: 100%; height: auto; display: block; margin: 0px; background: white; cursor: pointer;`);
+
+  const color = d3.scaleLinear()
+      .domain([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+      .range([
+        "#fff", 
+        "#47b7f8", 
+        "#40d763", 
+        "#a18bf5", 
+        "#fd812d",
+        "#f2b600",
+        "#ff7082",
+        "#40d763", 
+        "#47b7f8", 
+        "#a18bf5", 
+        "#fd812d",
+        "#f2b600",
+        "#ff7082",
+      ])
+
+  const pack = data => d3.pack()
+      .size([width, height])
+      .padding(2)
+    (d3.hierarchy(data)
+      .sum(d => d.value)
+      .sort((a, b) => b.value - a.value));
+  const root = pack(data);
+
+  function getGitHubFileURL(d) {
+    // https://github.com/bddicken/languages/blob/main/fibonacci/c/code.citer    let url = `https://github.com/${currentOwner}/${currentRepo}/tree/${currentDefaultBranch}`;
+    let url = `https://github.com/${currentOwner}/${currentRepo}/tree/${currentDefaultBranch}`;
+    let path = '';
+    while (d.parent != null) {
+      path = '/' + d.data.name + path;
+      d = d.parent;
+    }
+    return url + path;
+  }
+
+  const ng = svg.append("g");
+  const node = ng
+    .selectAll("circle")
+    .data(root.descendants().slice(1))
+    .join("circle")
+      .attr("fill", d => d.children ? color(d.depth) : "#ee7")
+      .on("mouseover", function() { d3.select(this).style("filter", "brightness(110%)"); })
+      .on("mouseout", function() { d3.select(this).style("filter", "brightness(100%)"); })
+      .on("click", (event, d) => {
+        console.log(d)
+        if (event.altKey) {
+          const url = getGitHubFileURL(d);
+          window.open(url, '_blank') .focus();     
+        }
+        if(focus !== d) {
+          zoom(event, d);
+          event.stopPropagation();
+        }
+      });
+
+  function getFontSize(d, e) {
+    return (d.r * 1.5) / d.data.name.length + 'px'
+  }
+  
+  const label = ng.append("g")
+      .style("font", "10px sans-serif")
+      .attr("pointer-events", "none")
+      .attr("text-anchor", "middle")
+    .selectAll("text")
+    .data(root.descendants())
+    .join("text")
+      .style('font-size', d => getFontSize(d, root))
+      .style("display", d => d.parent === root ? "inline" : "none")
+      .style("opacity", d => d.parent === root ? 0.75 : 0)
+      .style('font-weight', 'bold')
+      .style('dominant-baseline', 'middle')
+      .text(d => d.data.name);
+
+  svg.on("click", (event) => zoom(event, root));
+  let focus = root;
+  let view;
+  zoomTo([focus.x, focus.y, focus.r * 2]);
+  
+  function zoomTo(v) {
+    const k = wh / v[2];
+    view = v;
+    label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
+    node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
+    node.attr("r", d => d.r * k);
+  }
+
+  function zoomToEfficient(v) {
+    const k = wh / v[2];
+    view = v;
+    const x = (-v[0] + width/2) * k;
+    const y = (-v[1] + height/2) * k;
+    ng.attr('transform', `translate(${x} ${y}) scale(${k})`)
+  }
+
+  function zoom(event, d) {
+    const focus0 = focus;
+    focus = d;
+    const transition = svg.transition()
+      .duration(event.shiftKey ? 5000 : 1000)
+      .tween("zoom", d => {
+        const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+        return t => zoomToEfficient(i(t));
+      });
+    label
+      .filter(function(d) { return d.parent === focus || d === focus || this.style.display === "inline"; })
+      .transition(transition)
+      //.transition().duration(2000)
+        .style('font-size', d => getFontSize(d, focus))
+        .style("opacity", function(d) { if (d.parent === focus || (d === focus && !d.children)) return 0.75; return 0; })
+        .on("start",      function(d) { if (d.parent === focus || (d === focus && !d.children)) this.style.display = "inline"; })
+        .on("end",        function(d) { if (!(d.parent === focus || (d === focus && !d.children))) this.style.display = "none"; })
+  }
+}
+
+function getRepoInfoFromURL() {
+  const value = document.getElementById('repoInput').value;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const owner = params.get('owner');
+    const repo = params.get('repo');
+    if (owner && repo) {
+      fetchAndDisplay(owner, repo);
+      return true;
+    }
+  } catch (_) {
+  }
+  return false;
+}
+  
+function fetchAndDisplay(owner, repo) {
+  const toEditURL = new URL(window.location);
+  toEditURL.searchParams.set('owner', owner);
+  toEditURL.searchParams.set('repo', repo);
+  window.history.replaceState(null, null, toEditURL);
+  document.getElementById('repo').innerHTML = '';
+  setStatus(`loading ${owner}/${repo}...`);
+  fetchLatestCommit(owner, repo);
+}
+
+document.getElementById('repoButton').addEventListener('click', () => { 
+  const url = document.getElementById('repoInput').value;
+  const trimmedUrl = url.replace(/\/+$/, "");
+  const split = trimmedUrl.split('/')
+  const l = split.length;
+  repo = split[l-1];
+  owner = split[l-2];
+  fetchAndDisplay(owner, repo);
+});
+
+if (!getRepoInfoFromURL()) {
+  // If no repo specified in URL,
+  // Initially just load the json file from the server for neovim
+  d3.json("nvim.json")
+    .then(function(data){
+      currentOwner = 'neovim';
+      currentRepo = 'neovim';
+      tree = postProcessData(data.tree);
+      draw(tree);
+      setStatus(`loaded file visualization for neovim/neovim`);
+    });
+}
+
+</script>
+
+</html>
