@@ -38356,5 +38356,5 @@
   },
   "owner": "postgres",
   "repo": "postgres",
-  "defaultBranch": "postgres"
+  "defaultBranch": "master"
 }

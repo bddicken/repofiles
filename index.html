@@ -74,9 +74,20 @@
     right: 0px;
     width: 4em;
   }
-  svg, div {
+  div {
     text-align: center;
     color: #ddd;
+  }
+  svg {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+    color: #ddd;
+    max-width: 100%; 
+    height: auto;
+    display: block;
+    background: white;
+    cursor: pointer;
   }
   text {
     font-family: SFMono-Regular,monospace;
@@ -176,7 +187,7 @@ async function loadRepoTree(owner, repo, sha, defaultBranch) {
     currentRepo.tree = postProcessData(data.tree);
     currentRepo.owner = owner;
     currentRepo.repo = repo;
-    currentRepo.defaultBranch = repo;
+    currentRepo.defaultBranch = defaultBranch;
     draw(currentRepo.tree);
     setStatus(`loaded file visualization for ${owner}/${repo}`);
   });
@@ -202,6 +213,7 @@ function getElementWithName(climb, name) {
   }
   return undefined;
 }
+
 function postProcessData(data) {
   const tree = {name: 'flare', children: []};
   for (const row of data) {
@@ -228,9 +240,6 @@ function postProcessData(data) {
 }
   
 function draw(data) {
-
-  // TODO: change this so that it can be dynamically resized when window resizes
-
   let width = window.innerWidth;
   let height = window.innerHeight - 170;
   let wh = Math.min(width, height);
@@ -238,8 +247,7 @@ function draw(data) {
     .append("svg")
       .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
       .attr("width", width)
-      .attr("height", height)
-      .attr("style", `max-width: 100%; height: auto; display: block; margin: 0px; background: white; cursor: pointer;`);
+      .attr("height", height);
 
   const color = d3.scaleLinear()
       .domain([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -268,7 +276,6 @@ function draw(data) {
   const root = pack(data);
 
   function getGitHubFileURL(d) {
-    // https://github.com/bddicken/languages/blob/main/fibonacci/c/code.citer    let url = `https://github.com/${currentRepo.owner}/${currentRepo.repo}/tree/${currentRepo.defaultBranch}`;
     let url = `https://github.com/${currentRepo.owner}/${currentRepo.repo}/tree/${currentRepo.defaultBranch}`;
     let path = '';
     while (d.parent != null) {
@@ -287,7 +294,6 @@ function draw(data) {
       .on("mouseover", function() { d3.select(this).style("filter", "brightness(110%)"); })
       .on("mouseout", function() { d3.select(this).style("filter", "brightness(100%)"); })
       .on("click", (event, d) => {
-        console.log(d)
         if (event.altKey) {
           const url = getGitHubFileURL(d);
           window.open(url, '_blank') .focus();     
@@ -396,7 +402,13 @@ function go() {
   fetchAndDisplay(owner, repo);
 }
 
+window.onresize = () => { 
+  document.getElementById('repo').innerHTML = '';
+  draw(currentRepo.tree);
+};
+
 document.getElementById('repoButton').addEventListener('click', () => go());
+
 document.getElementById("repoInput").addEventListener("keydown", function(event) {
   if (event.key === "Enter") {
     go();

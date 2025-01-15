@@ -18846,5 +18846,5 @@
   },
   "owner": "neovim",
   "repo": "neovim",
-  "defaultBranch": "neovim"
+  "defaultBranch": "master"
 }
