@@ -442,10 +442,11 @@ document.getElementById('repoButton').addEventListener('click', () => {
 if (!getRepoInfoFromURL()) {
   // If no repo specified in URL,
   // Initially just load the json file from the server for neovim
-  d3.json("nvim.json")
+  d3.json("/cache/neovim_neovim.json")
     .then(function(data){
       currentOwner = 'neovim';
       currentRepo = 'neovim';
+      currentDefaultBranch = 'master';
       tree = postProcessData(data.tree);
       draw(tree);
       setStatus(`loaded file visualization for neovim/neovim`);
